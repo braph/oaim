@@ -1,30 +1,29 @@
 #include <err.h>
-#include <stdio.h>
 #include <signal.h>
 #include <unistd.h>
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <X11/extensions/XTest.h>
 
-#define FPS 30
+#define FPS 60
 
 #define _ 1,
-#define X 0,
+#define x 0,
 /* Shape of the area that should be searched for the enemy.
- * X represents a crosshair pixel (and will not be used in the search). */
+ * 'x' represents a crosshair pixel (and will not be used in the search). */
 char crosshair_area[10][10] = {
   { _ _ _ _ _ _ _ _ _ _ },
   { _ _ _ _ _ _ _ _ _ _ },
-  { _ _ _ _ X X _ _ _ _ },
-  { _ _ _ X X X X _ _ _ },
-  { _ _ X X X X X X _ _ },
-  { _ _ X X X X X X _ _ },
-  { _ _ _ X X X X _ _ _ },
-  { _ _ _ _ X X _ _ _ _ },
+  { _ _ _ _ x x _ _ _ _ },
+  { _ _ _ x x x x _ _ _ },
+  { _ _ x x x x x x _ _ },
+  { _ _ x x x x x x _ _ },
+  { _ _ _ x x x x _ _ _ },
+  { _ _ _ _ x x _ _ _ _ },
   { _ _ _ _ _ _ _ _ _ _ },
   { _ _ _ _ _ _ _ _ _ _ },
 };
-#undef X
+#undef x
 #undef _
 
 #define RECT_WIDTH  (sizeof(crosshair_area[0]))
@@ -51,7 +50,7 @@ int main() {
     Visual *vis = DefaultVisual(disp, XScreenNumberOfScreen(scr));
     root = RootWindow(disp, XScreenNumberOfScreen(scr));
     cm = XDefaultColormap(disp, DefaultScreen(disp));
-    XGetWindowAttributes(disp, DefaultRootWindow(disp), &ra);
+    XGetWindowAttributes(disp, root, &ra);
     cross_x = ra.width / 2 - RECT_WIDTH / 2;
     cross_y = ra.height / 2 - RECT_HEIGHT / 2;
   }
