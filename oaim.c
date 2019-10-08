@@ -7,8 +7,28 @@
 #include <X11/extensions/XTest.h>
 
 #define FPS 30
-#define RECT_WIDTH 7
-#define RECT_HEIGHT 10
+
+#define _ 1,
+#define X 0,
+/* Shape of the area that should be searched for the enemy.
+ * X represents a crosshair pixel (and will not be used in the search). */
+char crosshair_area[10][10] = {
+  { _ _ _ _ _ _ _ _ _ _ },
+  { _ _ _ _ _ _ _ _ _ _ },
+  { _ _ _ _ X X _ _ _ _ },
+  { _ _ _ X X X X _ _ _ },
+  { _ _ X X X X X X _ _ },
+  { _ _ X X X X X X _ _ },
+  { _ _ _ X X X X _ _ _ },
+  { _ _ _ _ X X _ _ _ _ },
+  { _ _ _ _ _ _ _ _ _ _ },
+  { _ _ _ _ _ _ _ _ _ _ },
+};
+#undef X
+#undef _
+
+#define RECT_WIDTH  (sizeof(crosshair_area[0]))
+#define RECT_HEIGHT (sizeof(crosshair_area)/sizeof(crosshair_area[0]))
 
 int quit;
 void sighandler(int _) { quit = 1; }
@@ -43,14 +63,16 @@ int main() {
     if (image) {
       for (unsigned x = 0; x < RECT_WIDTH; ++x)
         for (unsigned y = 0; y < RECT_HEIGHT; ++y) {
-          c.pixel = XGetPixel(image, x, y);
-          XQueryColor(disp, cm, &c);
-          if (c.green/256 >= 130 && c.red/256 < 70 && c.blue/256 < 90) {
-            XTestFakeButtonEvent(disp, 1, True, CurrentTime);
-            XTestFakeButtonEvent(disp, 1, False, CurrentTime);
-            XFlush(disp);
-            x = RECT_WIDTH;
-            break;
+          if (crosshair_area[y][x]) {
+            c.pixel = XGetPixel(image, x, y);
+            XQueryColor(disp, cm, &c);
+            if (c.green/256 >= 130 && c.red/256 < 70 && c.blue/256 < 90) {
+              XTestFakeButtonEvent(disp, 1, True, CurrentTime);
+              XTestFakeButtonEvent(disp, 1, False, CurrentTime);
+              XFlush(disp);
+              x = RECT_WIDTH;
+              break;
+            }
           }
         }
       XFree(image);
