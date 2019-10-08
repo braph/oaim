@@ -6,8 +6,9 @@
 #include <X11/Xutil.h>
 #include <X11/extensions/XTest.h>
 
-#define FPS 60
-#define RECT_SIZE 8
+#define FPS 30
+#define RECT_WIDTH 7
+#define RECT_HEIGHT 10
 
 int quit;
 void sighandler(int _) { quit = 1; }
@@ -31,23 +32,24 @@ int main() {
     root = RootWindow(disp, XScreenNumberOfScreen(scr));
     cm = XDefaultColormap(disp, DefaultScreen(disp));
     XGetWindowAttributes(disp, DefaultRootWindow(disp), &ra);
-    cross_x = ra.width / 2 - RECT_SIZE;
-    cross_y = ra.height / 2 - RECT_SIZE;
+    cross_x = ra.width / 2 - RECT_WIDTH / 2;
+    cross_y = ra.height / 2 - RECT_HEIGHT / 2;
   }
 
   do {
-    XImage* image = XGetImage(disp, root, cross_x, cross_y, RECT_SIZE, RECT_SIZE, AllPlanes, XYPixmap);
+    XImage* image = XGetImage(disp, root, cross_x, cross_y, RECT_WIDTH, RECT_HEIGHT, AllPlanes, XYPixmap);
     XColor c;
 
     if (image) {
-      for (unsigned x = 0; x < RECT_SIZE; ++x)
-        for (unsigned y = 0; y < RECT_SIZE; ++y) {
+      for (unsigned x = 0; x < RECT_WIDTH; ++x)
+        for (unsigned y = 0; y < RECT_HEIGHT; ++y) {
           c.pixel = XGetPixel(image, x, y);
           XQueryColor(disp, cm, &c);
           if (c.green/256 >= 130 && c.red/256 < 70 && c.blue/256 < 90) {
             XTestFakeButtonEvent(disp, 1, True, CurrentTime);
             XTestFakeButtonEvent(disp, 1, False, CurrentTime);
             XFlush(disp);
+            x = RECT_WIDTH;
             break;
           }
         }
