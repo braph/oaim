@@ -1,2 +1,4 @@
+CFLAGS = -O2
+
 all:
-	$(CC) oaim.c -O2 -lX11 -lXtst -o oaim
+	$(CC) $(CFLAGS) -lX11 -lXtst oaim.c -o oaim
