@@ -21,13 +21,24 @@
 
 #define RECT_WIDTH  10
 #define RECT_HEIGHT 10
-#define NUM_CROSSHAIRS 3
+#define NUM_CROSSHAIRS 4
 /* Shape of the area that should be searched for the enemy.
  * 'x' represents a crosshair pixel (and will not be used in the search). */
-uint8_t crosshair_areas[NUM_CROSSHAIRS][RECT_HEIGHT][RECT_WIDTH] = {
+const uint8_t crosshair_areas[NUM_CROSSHAIRS][RECT_HEIGHT][RECT_WIDTH] = {
 #define _ 1,
 #define x 0,
   {
+    { x x x x x x x x x x },
+    { x x x x _ _ x x x x },
+    { x x x _ x x _ x x x },
+    { x x _ x x x x _ x x },
+    { x _ x x x x x x _ x },
+    { x _ x x x x x x _ x },
+    { x x _ x x x x _ x x },
+    { x x x _ x x _ x x x },
+    { x x x x _ _ x x x x },
+    { x x x x x x x x x x },
+  }, {
     { _ _ _ _ _ _ _ _ _ _ },
     { _ _ _ _ _ _ _ _ _ _ },
     { _ _ _ _ x x _ _ _ _ },
@@ -68,12 +79,12 @@ uint8_t crosshair_areas[NUM_CROSSHAIRS][RECT_HEIGHT][RECT_WIDTH] = {
 struct color_range {
   uint16_t red[2], green[2], blue[2];
 };
-static struct color_range RANGE_WHITE = {
+static const struct color_range RANGE_WHITE = {
   .red   = { 235, 255 },
   .green = { 235, 255 },
   .blue  = { 235, 255 },
 };
-static struct color_range RANGE_GREEN = {
+static const struct color_range RANGE_GREEN = {
   .red   = { 0,   70  },
   .green = { 130, 255 },
   .blue  = { 0,   90  },
@@ -186,7 +197,7 @@ INIT:
     usleep(usecs);
     image = XGetImage(disp, root, cross_x, cross_y, RECT_WIDTH, RECT_HEIGHT, AllPlanes, XYPixmap);
 
-    if (image) {
+    if (1 /* image */) {
       for (unsigned x = 0; x < RECT_WIDTH; ++x)
         for (unsigned y = 0; y < RECT_HEIGHT; ++y)
           c.d2[y][x].pixel = XGetPixel(image, x, y);
