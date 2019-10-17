@@ -1,3 +1,4 @@
+#define _GNU_SOURCE /* strcasestr */
 #include <err.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -7,6 +8,7 @@
 #include <unistd.h>
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
+#include <X11/Xatom.h>
 #include <X11/extensions/XTest.h>
 #define case break;case
 
@@ -76,15 +78,15 @@ const uint8_t crosshair_areas[NUM_CROSSHAIRS][RECT_HEIGHT][RECT_WIDTH] = {
 #undef _
 };
 
-struct color_range {
+static const struct color_range {
   uint16_t red[2], green[2], blue[2];
-};
-static const struct color_range RANGE_WHITE = {
+}
+RANGE_WHITE = {
   .red   = { 235, 255 },
   .green = { 235, 255 },
   .blue  = { 235, 255 },
-};
-static const struct color_range RANGE_GREEN = {
+},
+RANGE_GREEN = {
   .red   = { 0,   70  },
   .green = { 130, 255 },
   .blue  = { 0,   90  },
@@ -103,8 +105,11 @@ static inline void printCrosshair(char *ch) {
     printf("%c%c", ch[xy] ? '_' : 'x', (1+xy) % RECT_WIDTH ? ' ' : '\n');
 }
 
-unsigned die;
-void sighandler(int _) { die = 1; }
+static char *get_window_title(Display*, Window);
+static Window *get_window_list(Display*, unsigned long*);
+
+static unsigned int die;
+static void sighandler(int _) { die = 1; }
 
 int main(int argc, char *argv[]) {
   unsigned int usecs;
@@ -139,7 +144,7 @@ COMMAND_LINE_OPTIONS:
           printf("- Shooting on green color\n");
           goto ADD_COLOR_RANGE;
         case 'C':
-          if (6 != sscanf(optarg, "%u-%u,%u-%u,%u-%u", &cr.red[0], &cr.red[1],
+          if (6 != sscanf(optarg, "%hu-%hu,%hu-%hu,%hu-%hu", &cr.red[0], &cr.red[1],
                 &cr.green[0], &cr.green[1], &cr.blue[0], &cr.blue[1]))
             errx(1, "Invalid custom color format: %s", optarg);
           printf("- Shooting on custom color: %s\n", optarg);
@@ -154,18 +159,17 @@ ADD_COLOR_RANGE:
           }
           color_ranges = realloc(color_ranges, ++color_ranges_count);
           color_ranges[color_ranges_count-1] = cr;
-          break;
       }
 
     usecs = 1000*1000 / fps - 100;
     memcpy(crosshair_area.d1, crosshair_areas[chnum], sizeof(crosshair_area.d1));
-    printf("- Using %u FPS\n", fps);
+    printf("- Using %d FPS\n", fps);
     printf("- Using crosshair %d:\n", chnum+1);
     printCrosshair(crosshair_area.d1);
   }
 
   Display *disp;
-  Window root;
+  Window root, game;
   Colormap cm;
   int cross_x, cross_y;
 
@@ -179,14 +183,30 @@ INIT:
 
     Screen *scr = ScreenOfDisplay(disp, DefaultScreen(disp));
     Visual *vis = DefaultVisual(disp, XScreenNumberOfScreen(scr));
-    root = RootWindow(disp, XScreenNumberOfScreen(scr));
+    root = game = RootWindow(disp, XScreenNumberOfScreen(scr));
     cm = XDefaultColormap(disp, DefaultScreen(disp));
+
+    unsigned long nchildren;
+    Window *children = get_window_list(disp, &nchildren);
+    while (nchildren-- >= 1) {
+      char *title = get_window_title(disp, *children);
+      if (strcasestr(title, "openarena")) {
+        game = *children;
+        break;
+      }
+      ++children;
+    }
+
+    if (game == root)
+      warn("No game window found, falling back on root window");
+
     XWindowAttributes ra;
-    XGetWindowAttributes(disp, root, &ra);
+    XGetWindowAttributes(disp, game, &ra);
     cross_x = ra.width / 2 - RECT_WIDTH / 2;
     cross_y = ra.height / 2 - RECT_HEIGHT / 2;
   }
 
+MAINLOOP:
   XImage *image;
   union {
     XColor d2[RECT_HEIGHT] [RECT_WIDTH];
@@ -195,9 +215,9 @@ INIT:
 
   while (!die) {
     usleep(usecs);
-    image = XGetImage(disp, root, cross_x, cross_y, RECT_WIDTH, RECT_HEIGHT, AllPlanes, XYPixmap);
+    image = XGetImage(disp, game, cross_x, cross_y, RECT_WIDTH, RECT_HEIGHT, AllPlanes, XYPixmap);
 
-    if (1 /* image */) {
+    if (image) {
       for (unsigned x = 0; x < RECT_WIDTH; ++x)
         for (unsigned y = 0; y < RECT_HEIGHT; ++y)
           c.d2[y][x].pixel = XGetPixel(image, x, y);
@@ -212,7 +232,6 @@ INIT:
               XFlush(disp);
               goto BREAK;
             }
-
 BREAK:
       XFree(image);
     }
@@ -220,3 +239,24 @@ BREAK:
 
   return XCloseDisplay(disp);
 }
+
+static Window *get_window_list(Display *disp, unsigned long *len) {
+  Atom type, prop = XInternAtom(disp, "_NET_CLIENT_LIST", False);
+  int form;
+  unsigned long remain;
+  unsigned char *list;
+  XGetWindowProperty(disp, XDefaultRootWindow(disp), prop, 0, 1024, False,
+      XA_WINDOW, &type, &form, len, &remain, &list);
+  return (Window*)list;
+}
+
+static char *get_window_title(Display *disp, Window window) {
+  Atom type, prop = XInternAtom(disp, "WM_CLASS", False);
+  int form;
+  unsigned long remain, len;
+  unsigned char *list;
+  XGetWindowProperty(disp, window, prop, 0, 1024, False, AnyPropertyType,
+      &type, &form, &len, &remain, &list);
+  return (char*)list;
+}
+
