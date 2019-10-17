@@ -102,7 +102,7 @@ RANGE_GREEN = {
 
 static inline void printCrosshair(char *ch) {
   for (unsigned xy = 0; xy < RECT_HEIGHT * RECT_WIDTH; ++xy)
-    printf("%c%c", ch[xy] ? '_' : 'x', (1+xy) % RECT_WIDTH ? ' ' : '\n');
+    printf("%c%c", ch[xy] ? '_' : 'x', ((1+xy) % RECT_WIDTH) ? ' ' : '\n');
 }
 
 static char *get_window_title(Display*, Window);
@@ -120,7 +120,7 @@ int main(int argc, char *argv[]) {
     uint8_t d1[RECT_HEIGHT * RECT_WIDTH];
   } crosshair_area;
 
-COMMAND_LINE_OPTIONS:
+/*COMMAND_LINE_OPTIONS*/
   {
     int o, fps = 60, chnum = 0;
     struct color_range cr;
@@ -173,7 +173,7 @@ ADD_COLOR_RANGE:
   Colormap cm;
   int cross_x, cross_y;
 
-INIT:
+/*INIT*/
   {
     if (! (disp = XOpenDisplay(NULL)))
       errx(1, "Can't open X display");
@@ -206,7 +206,7 @@ INIT:
     cross_y = ra.height / 2 - RECT_HEIGHT / 2;
   }
 
-MAINLOOP:
+/*MAINLOOP*/
   XImage *image;
   union {
     XColor d2[RECT_HEIGHT] [RECT_WIDTH];
