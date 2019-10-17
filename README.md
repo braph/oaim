@@ -3,4 +3,4 @@ oaim
 
 Stupid "aimbot" for Openarena, Instantgib.
 
-Use it with `/cg\_enemyAlwaysGreen 1`.
+Use it with `/cg_enemyAlwaysGreen 1`.
