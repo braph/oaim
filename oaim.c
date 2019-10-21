@@ -13,8 +13,9 @@
 #define case break;case
 
 #define USAGE \
-  "Usage: [-f FPS] [-WG] [-X crosshair] [-C color]\n" \
+  "Usage: [-f FPS] [-s shoot duration] [-WG] [-X crosshair] [-C color]\n" \
   " -f <FPS>\tSet FPS\n" \
+  " -s <SHOOT TIME>  Set shoot duration in milli seconds\n" \
   " -G\t\tShoot on green\n" \
   " -W\t\tShoot on white\n" \
   " -C <COLOR>\tShoot on custom color\n"\
@@ -32,12 +33,12 @@ const uint8_t crosshair_areas[NUM_CROSSHAIRS][RECT_HEIGHT][RECT_WIDTH] = {
   {
     { x x x x x x x x x x },
     { x x x x _ _ x x x x },
-    { x x x _ x x _ x x x },
+    { x x _ _ x x _ _ x x },
     { x x _ x x x x _ x x },
     { x _ x x x x x x _ x },
     { x _ x x x x x x _ x },
     { x x _ x x x x _ x x },
-    { x x x _ x x _ x x x },
+    { x x _ _ x x _ _ x x },
     { x x x x _ _ x x x x },
     { x x x x x x x x x x },
   }, {
@@ -92,6 +93,14 @@ RANGE_GREEN = {
   .blue  = { 0,   90  },
 };
 
+static const struct game_title {
+  const char *game, *win_title;
+} game_titles[] = {
+  { .game = "OpenArena", .win_title = "openarena" },
+  { .game = "OpenArena (YuEngine)", .win_title = "yuoa." }
+};
+#define game_titles_count (sizeof(game_titles)/sizeof(*game_titles))
+
 #define XColor_In_Range(X_COLOR , COLOR_RANGE) (\
     (X_COLOR.red   >= COLOR_RANGE.red[0])   && \
     (X_COLOR.red   <= COLOR_RANGE.red[1])   && \
@@ -113,6 +122,7 @@ static void sighandler(int _) { die = 1; }
 
 int main(int argc, char *argv[]) {
   unsigned int usecs;
+  unsigned int shoot_time = 10; // mili-seconds
   struct color_range *color_ranges = NULL;
   unsigned int color_ranges_count = 0;
   union {
@@ -125,13 +135,16 @@ int main(int argc, char *argv[]) {
     int o, fps = 60, chnum = 0;
     struct color_range cr;
 
-    while ((o = getopt(argc, argv, "hf:X:C:WG")) != -1)
+    while ((o = getopt(argc, argv, "hf:s:X:C:WG")) != -1)
       switch (o) {
         default:
           errx(1, USAGE);
         case 'f':
           if (! (fps = atoi(optarg)))
             errx(1, "Invalid value for FPS: %s", optarg);
+        case 's':
+          if (! (shoot_time = atoi(optarg)))
+            errx(1, "Invalid value for shoot time: %s", optarg);
         case 'X':
           if (! (chnum = atoi(optarg)) || --chnum >= NUM_CROSSHAIRS)
             errx(1, "Invalid value for crosshair: %s", optarg);
@@ -161,11 +174,13 @@ ADD_COLOR_RANGE:
           color_ranges[color_ranges_count-1] = cr;
       }
 
-    usecs = 1000*1000 / fps - 100;
     memcpy(crosshair_area.d1, crosshair_areas[chnum], sizeof(crosshair_area.d1));
     printf("- Using %d FPS\n", fps);
+    printf("- Using shoot duration: %dms:\n", shoot_time);
     printf("- Using crosshair %d:\n", chnum+1);
     printCrosshair(crosshair_area.d1);
+    usecs = 1000*1000 / fps - 100;
+    shoot_time *= 1000;
   }
 
   Display *disp;
@@ -186,19 +201,20 @@ ADD_COLOR_RANGE:
     root = game = RootWindow(disp, XScreenNumberOfScreen(scr));
     cm = XDefaultColormap(disp, DefaultScreen(disp));
 
-    unsigned long nchildren;
-    Window *children = get_window_list(disp, &nchildren);
-    while (nchildren-- >= 1) {
-      char *title = get_window_title(disp, *children);
-      if (strcasestr(title, "openarena")) {
-        game = *children;
-        break;
+    unsigned long n;
+    for (Window *win = get_window_list(disp, &n); n-- >= 1; ++win) {
+      char *title = get_window_title(disp, *win);
+      for (unsigned i = 0; i < game_titles_count; ++i) {
+        if (strcasestr(title, game_titles[i].win_title)) {
+          printf("Found game '%s' (matched '%s' on '%s')\n", game_titles[i].game, title, game_titles[i].win_title);
+          game = *win;
+          break;
+        }
       }
-      ++children;
     }
 
     if (game == root)
-      warn("No game window found, falling back on root window");
+      warnx("No game window found, falling back on root window");
 
     XWindowAttributes ra;
     XGetWindowAttributes(disp, game, &ra);
@@ -228,6 +244,8 @@ ADD_COLOR_RANGE:
           if (crosshair_area.d1[xy])
             if (XColor_In_Range(c.d1[xy], color_ranges[i])) {
               XTestFakeButtonEvent(disp, 1, True, CurrentTime);
+              XFlush(disp);
+              usleep(shoot_time);
               XTestFakeButtonEvent(disp, 1, False, CurrentTime);
               XFlush(disp);
               goto BREAK;
