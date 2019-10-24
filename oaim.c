@@ -13,9 +13,10 @@
 #define case break;case
 
 #define USAGE \
-  "Usage: [-f FPS] [-s shoot duration] [-WG] [-X crosshair] [-C color]\n" \
+  "Usage: [-f FPS] [-s shoot duration] [-d shoot delay] [-WG] [-X crosshair] [-C color]\n" \
   " -f <FPS>\tSet FPS\n" \
   " -s <SHOOT TIME>  Set shoot duration in milli seconds\n" \
+  " -d <SHOOT DELAY> Set shoot delay in milli seconds (Format: ShootDelayMin-ShootDelayMax)\n" \
   " -G\t\tShoot on green\n" \
   " -W\t\tShoot on white\n" \
   " -C <COLOR>\tShoot on custom color\n"\
@@ -121,10 +122,13 @@ static unsigned int die;
 static void sighandler(int _) { die = 1; }
 
 int main(int argc, char *argv[]) {
-  unsigned int usecs;
-  unsigned int shoot_time = 10; // mili-seconds
+  unsigned int
+    usecs,
+    shoot_time = 10, // mili-seconds
+    shoot_delay_min = 0, // mili-seconds
+    shoot_delay_addrand = 0, // mili-seconds
+    color_ranges_count = 0;
   struct color_range *color_ranges = NULL;
-  unsigned int color_ranges_count = 0;
   union {
     uint8_t d2[RECT_HEIGHT] [RECT_WIDTH];
     uint8_t d1[RECT_HEIGHT * RECT_WIDTH];
@@ -133,15 +137,21 @@ int main(int argc, char *argv[]) {
 /*COMMAND_LINE_OPTIONS*/
   {
     int o, fps = 60, chnum = 0;
+    unsigned int shoot_delay_max = 0;
     struct color_range cr;
 
-    while ((o = getopt(argc, argv, "hf:s:X:C:WG")) != -1)
+    while ((o = getopt(argc, argv, "hd:f:s:C:WGX:")) != -1)
       switch (o) {
         default:
           errx(1, USAGE);
         case 'f':
           if (! (fps = atoi(optarg)))
             errx(1, "Invalid value for FPS: %s", optarg);
+        case 'd':
+          if (2 != sscanf(optarg, "%u-%u", &shoot_delay_min, &shoot_delay_max))
+            errx(1, "Invalid value for shoot delay: %s", optarg);
+          if (shoot_delay_min > shoot_delay_max)
+            errx(1, "ShootDelayMin > ShootDelayMax: %s", optarg);
         case 's':
           if (! (shoot_time = atoi(optarg)))
             errx(1, "Invalid value for shoot time: %s", optarg);
@@ -176,11 +186,15 @@ ADD_COLOR_RANGE:
 
     memcpy(crosshair_area.d1, crosshair_areas[chnum], sizeof(crosshair_area.d1));
     printf("- Using %d FPS\n", fps);
-    printf("- Using shoot duration: %dms:\n", shoot_time);
+    printf("- Using shoot duration: %ums\n", shoot_time);
+    printf("- Using shoot delay: %ums - %ums\n", shoot_delay_min, shoot_delay_max);
     printf("- Using crosshair %d:\n", chnum+1);
     printCrosshair(crosshair_area.d1);
     usecs = 1000*1000 / fps - 100;
     shoot_time *= 1000;
+    shoot_delay_min *= 1000;
+    shoot_delay_max *= 1000;
+    shoot_delay_addrand = shoot_delay_max - shoot_delay_min;
   }
 
   Display *disp;
@@ -206,11 +220,11 @@ ADD_COLOR_RANGE:
       char *title = get_window_title(disp, *win);
       for (unsigned i = 0; i < game_titles_count; ++i) {
         if (strcasestr(title, game_titles[i].win_title)) {
-          printf("Found game '%s' (matched '%s' on '%s')\n", game_titles[i].game, title, game_titles[i].win_title);
+          printf("Found game '%s' ('%s' =~ '%s')\n", game_titles[i].game, title, game_titles[i].win_title);
           game = *win;
-          break;
         }
       }
+      free(title);
     }
 
     if (game == root)
@@ -243,6 +257,10 @@ ADD_COLOR_RANGE:
         for (unsigned xy = 0; xy < RECT_WIDTH*RECT_HEIGHT; ++xy)
           if (crosshair_area.d1[xy])
             if (XColor_In_Range(c.d1[xy], color_ranges[i])) {
+              if (shoot_delay_min)
+                usleep(shoot_delay_min);
+              if (shoot_delay_addrand)
+                usleep((rand() * 1000) % shoot_delay_addrand);
               XTestFakeButtonEvent(disp, 1, True, CurrentTime);
               XFlush(disp);
               usleep(shoot_time);
