@@ -1,4 +1,5 @@
-CFLAGS = -O2
+CFLAGS = -Os
+USE_SHM = 1 # Use the shared memory extension?
 
 all:
-	$(CC) $(CFLAGS) -lX11 -lXtst oaim.c -o oaim
+	$(CC) $(CFLAGS) -Wall -DUSE_SHM=$(USE_SHM) oaim.c -lX11 -lXtst -lXext -o oaim
