@@ -20,6 +20,8 @@
 #define likely(expr)      (__builtin_expect((!!(expr)), 1))
 #define unlikely(expr)    (__builtin_expect((!!(expr)), 0))
 
+static unsigned int die;
+
 #define USAGE \
   "Usage: [-f FPS] [-s shoot duration] [-d shoot delay] [-WG] [-X crosshair] [-C color]\n" \
   " -f <FPS>\tSet FPS\n" \
@@ -150,7 +152,7 @@ static int parse_options(int argc, char **argv, struct options *opts) {
   int o;
   struct color_range cr;
 
-  while ((o = getopt(argc, argv, "hd:f:s:C:WGX:")) != -1)
+  while ((o = getopt(argc, argv, "hd:f:s:T:C:WGX:")) != -1)
     switch (o) {
       default:
         errx(1, USAGE);
@@ -165,6 +167,9 @@ static int parse_options(int argc, char **argv, struct options *opts) {
       case 's':
         if (! (opts->shoot_time = atoi(optarg)))
           errx(1, "Invalid value for shoot time: %s", optarg);
+      case 'T':
+        if (! (opts->threshold = atoi(optarg)))
+          errx(1, "Invalid value for threshold: %s", optarg);
       case 'X':
         if (! (opts->crosshair_number = atoi(optarg)) || opts->crosshair_number > NUM_CROSSHAIRS)
           errx(1, "Invalid value for crosshair: %s", optarg);
@@ -233,10 +238,6 @@ int scan_image(XImage *image,
   return 0;
 }
 
-static unsigned int die;
-static void    sighandler(int _) {++die;}
-static Window  get_game_window(Display*);
-
 #if USE_SHM
 /* Implementation using shared memory */
 static int hitbot_with_shm(
@@ -281,8 +282,12 @@ static int hitbot_with_shm(
       if (scan_image(image, &crosshair, opts.color_ranges, opts.color_ranges_size, opts.threshold))
         shoot(disp, opts.shoot_delay_min, opts.shoot_delay_max, opts.shoot_time);
 
-  XShmDetach(disp, &shminfo);
-  shmdt(shminfo.shmaddr);
+  if (! XShmDetach(disp, &shminfo))
+    printf("XShmDetach(): failed\n");
+  if (shmdt(shminfo.shmaddr))
+    printf("shmdt(): failed\n");
+  if (shmctl(shminfo.shmid, IPC_RMID, NULL))
+    printf("shmctl(): failed\n");
   return 1;
 }
 #endif
@@ -309,6 +314,9 @@ static int hitbot_no_shm(
   return 1;
 }
 
+static void   sighandler(int _) {++die;}
+static Window get_game_window(Display*);
+
 int main(int argc, char **argv) {
   struct options opts  = {
     .fps               = 1,
@@ -317,7 +325,7 @@ int main(int argc, char **argv) {
     .shoot_delay_max   = 0,
     .color_ranges      = NULL,
     .color_ranges_size = 0,
-    .threshold         = 3,
+    .threshold         = 100,
     .crosshair_number  = 1
   };
 
@@ -341,20 +349,19 @@ int main(int argc, char **argv) {
   opts.shoot_delay_max *= 1000;
 
 /*INIT*/
-  Display *disp;
-  if (! (disp = XOpenDisplay(NULL)))
-    errx(1, "Can't open X display");
-
   signal(SIGINT, sighandler);
   signal(SIGTERM, sighandler);
   XSetErrorHandler((int (*)(Display*, XErrorEvent*)) sighandler);
 
+  Display *disp = XOpenDisplay(NULL);
+  if (! disp)
+    errx(1, "Can't open X display");
   Screen *scr = ScreenOfDisplay(disp, DefaultScreen(disp));
   Visual *vis = DefaultVisual(disp, XScreenNumberOfScreen(scr));
   Window root = RootWindow(disp, XScreenNumberOfScreen(scr));
   Window game = get_game_window(disp);
   if (! game) {
-    warnx("No game window found, falling back on root window");
+    warnx("No game window found, falling back on root window.");
     game = root;
   }
 
@@ -364,8 +371,8 @@ int main(int argc, char **argv) {
   int cross_y = ra.height / 2 - RECT_HEIGHT / 2;
 
 #if USE_SHM
-  if (hitbot_with_shm(disp, vis, game, &crosshair, cross_x, cross_y, &opts));
-  else printf("Falling back on non shared memory version\n"),
+  if (!hitbot_with_shm(disp, vis, game, &crosshair, cross_x, cross_y, &opts))
+    printf("Falling back on non shared memory version.\n"),
 #endif
   hitbot_no_shm(disp, vis, game, &crosshair, cross_x, cross_y, &opts);
 
